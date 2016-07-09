@@ -1,37 +1,31 @@
 'use strict'
 
-const bl = require('bl')
-
 exports = module.exports
 
-exports.setUp = (basePath, blobStore, locks) => {
-  const store = blobStore(basePath)
+exports.setUp = (basePath, BlobStore, locks) => {
+  const store = new BlobStore(basePath)
+  const versionFile = 'version'
 
   return {
-    exists: (callback) => {
-      store.exists('version', callback)
+    exists (cb) {
+      store.exists(versionFile)
+        .subscribe((exists) => cb(null, exists), cb)
     },
-    get: (callback) => {
-      store
-        .createReadStream('version')
-        .pipe(bl((err, version) => {
-          if (err) {
-            return callback(err)
-          }
-          callback(null, version.toString('utf8'))
-        }))
+    get (cb) {
+      store.read(versionFile)
+        .map((version) => version.toString('utf8'))
+        .subscribe((version) => cb(null, version), cb)
     },
-    set: (value, callback) => {
+    set (value, cb) {
       locks.lock((err) => {
         if (err) {
-          return callback(err)
+          return cb(err)
         }
 
-        store.createWriteStream('version')
-          .once('finish', () => {
-            locks.unlock(callback)
+        store.write(versionFile, value)
+          .subscribe(null, cb, () => {
+            locks.unlock(cb)
           })
-          .end(value)
       })
     }
   }

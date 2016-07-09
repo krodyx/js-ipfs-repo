@@ -28,7 +28,8 @@ describe('IPFS Repo Tests on on Node.js', () => {
     })
   })
 
-  const fs = require('fs-blob-store')
+  // const fs = require('fs-blob-store')
+  const fs = require('../src/fs-store')
   const repo = new IPFSRepo(repoPath, {stores: fs})
   require('./repo-test')(repo)
 })

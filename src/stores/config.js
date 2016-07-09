@@ -1,40 +1,28 @@
 'use strict'
 
-const bl = require('bl')
-
 exports = module.exports
 
-exports.setUp = (basePath, blobStore, locks) => {
-  const store = blobStore(basePath)
+exports.setUp = (basePath, BlobStore, locks) => {
+  const store = new BlobStore(basePath)
+  const configFile = 'config'
+
   return {
-    get: (callback) => {
-      store
-        .createReadStream('config')
-        .pipe(bl((err, config) => {
-          if (err) {
-            return callback(err)
-          }
-          let result
-          try {
-            result = JSON.parse(config.toString())
-          } catch (err) {
-            return callback(err)
-          }
-          callback(null, result)
-        }))
+    get (cb) {
+      store.read(configFile)
+        .map((config) => config.toString())
+        .map(JSON.parse)
+        .subscribe((config) => cb(null, config), cb)
     },
 
-    set: (config, callback) => {
+    set (config, cb) {
       locks.lock((err) => {
         if (err) {
-          return callback(err)
+          return cb(err)
         }
 
-        store.createWriteStream('config')
-          .once('finish', () => {
-            locks.unlock(callback)
-          })
-          .end(JSON.stringify(config, null, 2))
+        const done = (err) => locks.unlock(() => cb(err))
+        store.write(configFile, JSON.stringify(config, null, 2))
+          .subscribe(null, done, done)
       })
     }
   }

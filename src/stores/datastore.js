@@ -1,8 +1,6 @@
 'use strict'
 
 const Lock = require('lock')
-const stream = require('stream')
-const bl = require('bl')
 const Block = require('ipfs-block')
 
 const PREFIX_LENGTH = 8
@@ -18,29 +16,12 @@ function multihashToPath (multihash, extension) {
   return path
 }
 
-exports.setUp = (basePath, blobStore, locks) => {
-  const store = blobStore(basePath + '/blocks')
+exports.setUp = (basePath, BlobStore, locks) => {
+  const store = new BlobStore(basePath + '/blocks')
   const lock = new Lock()
 
-  const createReadStream = (multihash, extension) => {
-    const path = multihashToPath(multihash, extension)
-    return store.createReadStream(path)
-  }
-
-  const createWriteStream = (multihash, extension, cb) => {
-    const path = multihashToPath(multihash, extension)
-    const through = stream.PassThrough()
-
-    lock(path, (release) => {
-      const ws = store.createWriteStream(path, release(cb))
-      through.pipe(ws)
-    })
-
-    return through
-  }
-
   return {
-    get: (key, extension, cb) => {
+    get (key, extension, cb) {
       if (typeof extension === 'function') {
         cb = extension
         extension = 'data'
@@ -50,29 +31,38 @@ exports.setUp = (basePath, blobStore, locks) => {
         return cb(new Error('Invalid key'))
       }
 
-      createReadStream(key, extension)
-        .pipe(bl((err, data) => {
-          if (err) {
-            return cb(err)
-          }
-          if (extension === 'data') {
-            extension = 'protobuf'
-          }
-          cb(null, new Block(data, extension))
-        }))
+      const path = multihashToPath(key, extension)
+      lock(path, (release) => {
+        const done = release(cb)
+        store.read(path)
+          .map((data) => {
+            if (extension === 'data') {
+              extension = 'protobuf'
+            }
+            cb(null, new Block(data, extension))
+          })
+          .subscribe((block) => done(null, block), done)
+      })
     },
 
-    put: (block, cb) => {
+    put (block, cb) {
       if (!block || !block.data) {
         return cb(new Error('Invalid block'))
       }
 
-      const ws = createWriteStream(block.key, block.extension, cb)
-      ws.write(block.data)
-      ws.end()
+      const path = multihashToPath(block.key, block.extension)
+      lock(path, (release) => {
+        store.write(path, block.data)
+          .subscribe(
+            (meta) => {
+              release(cb)(null, meta)
+            },
+            release(cb)
+          )
+      })
     },
 
-    has: (key, extension, cb) => {
+    has (key, extension, cb) {
       if (typeof extension === 'function') {
         cb = extension
         extension = undefined
@@ -83,10 +73,11 @@ exports.setUp = (basePath, blobStore, locks) => {
       }
 
       const path = multihashToPath(key, extension)
-      store.exists(path, cb)
+      store.exists(path)
+        .subscribe((exists) => cb(null, exists), cb)
     },
 
-    delete: (key, extension, cb) => {
+    delete (key, extension, cb) {
       if (typeof extension === 'function') {
         cb = extension
         extension = undefined
@@ -97,7 +88,8 @@ exports.setUp = (basePath, blobStore, locks) => {
       }
 
       const path = multihashToPath(key, extension)
-      store.remove(path, cb)
+      store.remove(path)
+        .subscribe(null, cb, cb)
     }
   }
 }

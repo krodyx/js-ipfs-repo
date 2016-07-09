@@ -8,30 +8,27 @@ const Block = require('ipfs-block')
 
 module.exports = function (repo) {
   describe('IPFS Repo Tests', function () {
-    it('can init repo /wo new', (done) => {
+    it('can init repo /wo new', () => {
       var repo
       function run () {
         repo = Repo('foo', { stores: require('abstract-blob-store') })
       }
       expect(run).to.not.throw(Error)
       expect(repo).to.be.an.instanceof(Repo)
-      done()
     })
 
-    it('bad repo init 1', (done) => {
+    it('bad repo init 1', () => {
       function run () {
         return new Repo()
       }
       expect(run).to.throw(Error)
-      done()
     })
 
-    it('bad repo init 2', (done) => {
+    it('bad repo init 2', () => {
       function run () {
         return new Repo('', {})
       }
       expect(run).to.throw(Error)
-      done()
     })
 
     it('check if Repo exists', (done) => {
@@ -62,17 +59,21 @@ module.exports = function (repo) {
           expect(err).to.not.exist
           repo.locks.lock((err) => {
             expect(err).to.not.exist
+            unlock()
+
             repo.locks.unlock((err) => {
               expect(err).to.not.exist
               done()
             })
           })
 
-          setTimeout(() => {
-            repo.locks.unlock((err) => {
-              expect(err).to.not.exist
-            })
-          }, 500)
+          function unlock () {
+            setTimeout(() => {
+              repo.locks.unlock((err) => {
+                expect(err).to.not.exist
+              })
+            }, 10)
+          }
         })
       })
     })
@@ -262,7 +263,7 @@ module.exports = function (repo) {
         })
 
         it('custom extension', (done) => {
-          const b = new Block('hello world', 'ipld')
+          const b = new Block('hello world 2', 'ipld')
 
           repo.datastore.delete(b.key, b.extension, (err) => {
             expect(err).to.not.exist

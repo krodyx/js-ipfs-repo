@@ -1,50 +1,32 @@
 'use strict'
 
+const Rx = require('rxjs/Rx')
+
 exports = module.exports
 
-exports.setUp = (basePath, blobStore) => {
-  const store = blobStore(basePath)
+exports.setUp = (basePath, BlobStore) => {
+  const store = new BlobStore(basePath)
   const lockFile = 'repo.lock'
 
   return {
-    lock: function (cb) {
-      function createLock () {
-        store
-          .createWriteStream(lockFile)
-          .once('finish', () => {
-            cb()
-          })
-          .end()
-      }
+    lock (cb) {
+      store.exists(lockFile)
+        .mergeMap((exists) => {
+          if (exists) return Rx.Observable.empty()
 
-      function doesExist (err, exists) {
-        if (err) {
-          return cb(err)
-        }
-        if (exists) {
-          // default 100ms
-          setTimeout(function () {
-            store.exists(lockFile, doesExist)
-          }, 100)
-          return
-        }
-        createLock()
-      }
-
-      store.exists(lockFile, doesExist)
-    },
-    unlock: (cb) => {
-      store.remove(lockFile, (err) => {
-        if (err) { return cb(err) }
-        store.exists(lockFile, (err, exists) => {
-          if (err) { return cb(err) }
-
-          store.exists(lockFile, (err, exists) => {
-            if (err) { return cb(err) }
-            cb()
-          })
+          return store.write(lockFile)
         })
-      })
+        .subscribe(null, cb, cb)
+    },
+
+    unlock (cb) {
+      store.exists(lockFile)
+        .mergeMap((exists) => {
+          if (!exists) return Rx.Observable.empty()
+
+          return store.remove(lockFile)
+        })
+        .subscribe(null, cb, cb)
     }
   }
 }

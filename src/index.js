@@ -1,17 +1,20 @@
 'use strict'
 
+const assert = require('assert')
+
 const stores = require('./stores')
 
 function Repo (repoPath, options) {
   if (!(this instanceof Repo)) {
     return new Repo(repoPath, options)
   }
-  if (!options) { throw new Error('missing options param') }
-  if (!options.stores) { throw new Error('missing options.stores param') }
+
+  assert(options, 'missing options param')
+  assert(options.stores, 'missing options.stores param')
 
   // If options.stores is an abstract-blob-store instead of a map, use it for
   // all stores.
-  if (options.stores.prototype && options.stores.prototype.createWriteStream) {
+  if (options.stores.prototype) {
     const store = options.stores
     options.stores = {
       keys: store,
@@ -25,29 +28,23 @@ function Repo (repoPath, options) {
 
   this.path = repoPath
 
-  this.locks = stores
-                  .locks
-                  .setUp(repoPath, options.stores.locks)
+  this.locks = stores.locks.setUp(repoPath, options.stores.locks)
 
-  this.exists = (callback) => {
-    this.version.exists(callback)
+  const storeNames = [
+    'version',
+    'config',
+    'keys',
+    'datastore'
+  ]
+
+  storeNames.forEach((name) => {
+    const config = options.stores[name]
+    this[name] = stores[name].setUp(repoPath, config, this.locks, this.config)
+  })
+
+  this.exists = (cb) => {
+    this.version.exists(cb)
   }
-
-  this.version = stores
-                   .version
-                   .setUp(repoPath, options.stores.version, this.locks)
-
-  this.config = stores
-                .config
-                .setUp(repoPath, options.stores.config, this.locks)
-
-  this.keys = stores
-                .keys
-                .setUp(repoPath, options.stores.keys, this.locks, this.config)
-
-  this.datastore = stores
-                .datastore
-                .setUp(repoPath, options.stores.datastore, this.locks)
 }
 
 exports = module.exports = Repo

@@ -4,12 +4,12 @@ exports = module.exports
 
 exports.setUp = (basePath, blobStore, locks, config) => {
   return {
-    get: (callback) => {
+    get (cb) {
       config.get((err, config) => {
         if (err) {
-          return callback(err)
+          return cb(err)
         }
-        callback(null, config.Identity.PrivKey)
+        cb(null, config.Identity.PrivKey)
       })
     }
   }
