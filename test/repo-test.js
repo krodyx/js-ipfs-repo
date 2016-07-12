@@ -32,11 +32,13 @@ module.exports = function (repo) {
     })
 
     it('check if Repo exists', (done) => {
-      repo.exists((err, exists) => {
-        expect(err).to.not.exist
-        expect(exists).to.equal(true)
-        done()
-      })
+      repo.exists().subscribe(
+        (exists) => {
+          expect(exists).to.equal(true)
+          done()
+        },
+        done
+      )
     })
 
     it('exposes the path', () => {
@@ -45,89 +47,74 @@ module.exports = function (repo) {
 
     describe('locks', () => {
       it('lock, unlock', (done) => {
-        repo.locks.lock((err) => {
-          expect(err).to.not.exist
-          repo.locks.unlock((err) => {
-            expect(err).to.not.exist
-            done()
-          })
-        })
+        repo.locks
+          .lock()
+          .mergeMap(() => repo.locks.unlock())
+          .subscribe(null, done, done)
       })
 
       it('lock, lock', (done) => {
-        repo.locks.lock((err) => {
-          expect(err).to.not.exist
-          repo.locks.lock((err) => {
-            expect(err).to.not.exist
-            unlock()
-
-            repo.locks.unlock((err) => {
-              expect(err).to.not.exist
-              done()
-            })
-          })
-
-          function unlock () {
-            setTimeout(() => {
-              repo.locks.unlock((err) => {
-                expect(err).to.not.exist
-              })
-            }, 10)
-          }
-        })
+        repo.locks
+          .lock()
+          .mergeMap(() => repo.locks.lock())
+          .mergeMap(() => repo.locks.lock())
+          .delay(10)
+          .mergeMap(() => repo.locks.unlock())
+          .subscribe(null, done, done)
       })
     })
 
     describe('keys', () => {
       it('get PrivKey', (done) => {
-        repo.keys.get((err, privKey) => {
-          expect(err).to.not.exist
-          expect(privKey).to.be.a('string')
-          done()
-        })
+        repo.keys
+          .get()
+          .subscribe((privKey) => {
+            expect(privKey).to.be.a('string')
+            done()
+          }, done)
       })
     })
 
     describe('config', () => {
       it('get config', (done) => {
-        repo.config.get((err, config) => {
-          expect(err).to.not.exist
-          expect(config).to.be.a('object')
-          done()
-        })
+        repo.config
+          .get()
+          .subscribe((config) => {
+            expect(config).to.be.a('object')
+            done()
+          }, done)
       })
 
       it('set config', (done) => {
-        repo.config.set({a: 'b'}, (err) => {
-          expect(err).to.not.exist
-          repo.config.get((err, config) => {
-            expect(err).to.not.exist
+        repo.config
+          .set({a: 'b'})
+          .mergeMap(() => repo.config.get())
+          .subscribe((config) => {
             expect(config).to.deep.equal({a: 'b'})
             done()
-          })
-        })
+          }, done)
       })
     })
 
     describe('version', () => {
       it('get version', (done) => {
-        repo.version.get((err, version) => {
-          expect(err).to.not.exist
-          expect(version).to.be.a('string')
-          expect(Number(version)).to.be.a('number')
-          done()
-        })
+        repo.version
+          .get()
+          .subscribe((version) => {
+            expect(version).to.be.a('string')
+            expect(Number(version)).to.be.a('number')
+            done()
+          }, done)
       })
 
       it('set version', (done) => {
-        repo.version.set('9000', (err) => {
-          expect(err).to.not.exist
-          repo.version.get((err, version) => {
-            expect(err).to.not.exist
+        repo.version
+          .set('9000')
+          .mergeMap(() => repo.version.get())
+          .subscribe((version) => {
             expect(version).to.equal('9000')
             done()
-          })
-        })
+          }, done)
       })
     })
 
@@ -138,49 +125,44 @@ module.exports = function (repo) {
       describe('.put', () => {
         it('simple', function (done) {
           const b = new Block('hello world')
-          repo.datastore.put(b, (err, meta) => {
-            expect(err).to.not.exist
-            expect(meta.key).to.be.eql(helloKey)
-            done()
-          })
+
+          repo.datastore
+            .put(b)
+            .subscribe((meta) => {
+              expect(meta.key).to.be.eql(helloKey)
+              done()
+            }, done)
         })
 
         it('multi write (locks)', (done) => {
           const b = new Block('hello world')
 
-          let i = 0
-          const finish = () => {
-            i++
-            if (i === 2) done()
-          }
-
-          repo.datastore.put(b, (err, meta) => {
-            expect(err).to.not.exist
-            expect(meta.key).to.equal(helloKey)
-            finish()
-          })
-
-          repo.datastore.put(b, (err, meta) => {
-            expect(err).to.not.exist
-            expect(meta.key).to.equal(helloKey)
-            finish()
-          })
+          repo.datastore
+            .put(b)
+            .merge(repo.datastore.put(b))
+            .subscribe((meta) => {
+              expect(meta.key).to.equal(helloKey)
+            }, done, done)
         })
 
         it('custom extension', function (done) {
           const b = new Block('hello world 2', 'ipld')
-          repo.datastore.put(b, (err, meta) => {
-            expect(err).to.not.exist
-            expect(meta.key).to.be.eql(helloIpldKey)
-            done()
-          })
+
+          repo.datastore
+            .put(b)
+            .subscribe((meta) => {
+              expect(meta.key).to.be.eql(helloIpldKey)
+              done()
+            }, done)
         })
 
         it('returns an error on invalid block', (done) => {
-          repo.datastore.put('hello', (err) => {
-            expect(err.message).to.be.eql('Invalid block')
-            done()
-          })
+          repo.datastore
+            .put('hello')
+            .subscribe(null, (err) => {
+              expect(err.message).to.be.eql('Invalid block')
+              done()
+            })
         })
       })
 
@@ -188,30 +170,32 @@ module.exports = function (repo) {
         it('simple', (done) => {
           const b = new Block('hello world')
 
-          repo.datastore.get(b.key, (err, data) => {
-            expect(err).to.not.exist
-            expect(data).to.be.eql(b)
-
-            done()
-          })
+          repo.datastore
+            .get(b.key)
+            .subscribe((data) => {
+              expect(data).to.be.eql(b)
+              done()
+            }, done)
         })
 
         it('custom extension', (done) => {
           const b = new Block('hello world 2', 'ipld')
 
-          repo.datastore.get(b.key, b.extension, (err, data) => {
-            expect(err).to.not.exist
-            expect(data).to.be.eql(b)
-
-            done()
-          })
+          repo.datastore
+            .get(b.key, b.extension)
+            .subscribe((data) => {
+              expect(data).to.be.eql(b)
+              done()
+            }, done)
         })
 
         it('returns an error on invalid block', (done) => {
-          repo.datastore.get(null, (err) => {
-            expect(err.message).to.be.eql('Invalid key')
-            done()
-          })
+          repo.datastore
+            .get(null)
+            .subscribe(null, (err) => {
+              expect(err.message).to.be.eql('Invalid key')
+              done()
+            })
         })
       })
 
@@ -219,31 +203,34 @@ module.exports = function (repo) {
         it('existing block', (done) => {
           const b = new Block('hello world')
 
-          repo.datastore.has(b.key, (err, exists) => {
-            expect(err).to.not.exist
-            expect(exists).to.equal(true)
-            done()
-          })
+          repo.datastore
+            .has(b.key)
+            .subscribe((exists) => {
+              expect(exists).to.equal(true)
+              done()
+            }, done)
         })
 
         it('with extension', (done) => {
           const b = new Block('hello world')
 
-          repo.datastore.has(b.key, 'data', (err, exists) => {
-            expect(err).to.not.exist
-            expect(exists).to.equal(true)
-            done()
-          })
+          repo.datastore
+            .has(b.key, 'data')
+            .subscribe((exists) => {
+              expect(exists).to.equal(true)
+              done()
+            }, done)
         })
 
         it('non existent block', (done) => {
           const b = new Block('wooot')
 
-          repo.datastore.has(b.key, (err, exists) => {
-            expect(err).to.not.exist
-            expect(exists).to.equal(false)
-            done()
-          })
+          repo.datastore
+            .has(b.key)
+            .subscribe((exists) => {
+              expect(exists).to.equal(false)
+              done()
+            }, done)
         })
       })
 
@@ -251,29 +238,25 @@ module.exports = function (repo) {
         it('simple', (done) => {
           const b = new Block('hello world')
 
-          repo.datastore.delete(b.key, (err) => {
-            expect(err).to.not.exist
-
-            repo.datastore.has(b.key, (err, exists) => {
-              expect(err).to.not.exist
+          repo.datastore
+            .delete(b.key)
+            .mergeMap(() => repo.datastore.has(b.key))
+            .subscribe((exists) => {
               expect(exists).to.equal(false)
               done()
-            })
-          })
+            }, done)
         })
 
         it('custom extension', (done) => {
           const b = new Block('hello world 2', 'ipld')
 
-          repo.datastore.delete(b.key, b.extension, (err) => {
-            expect(err).to.not.exist
-
-            repo.datastore.has(b.key, b.extension, (err, exists) => {
-              expect(err).to.not.exist
+          repo.datastore
+            .delete(b.key, b.extension)
+            .mergeMap(() => repo.datastore.has(b.key, b.extension))
+            .subscribe((exists) => {
               expect(exists).to.equal(false)
               done()
-            })
-          })
+            }, done)
         })
       })
     })

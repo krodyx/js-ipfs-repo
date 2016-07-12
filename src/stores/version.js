@@ -1,5 +1,7 @@
 'use strict'
 
+const Rx = require('rxjs/Rx')
+
 exports = module.exports
 
 exports.setUp = (basePath, BlobStore, locks) => {
@@ -7,26 +9,22 @@ exports.setUp = (basePath, BlobStore, locks) => {
   const versionFile = 'version'
 
   return {
-    exists (cb) {
-      store.exists(versionFile)
-        .subscribe((exists) => cb(null, exists), cb)
+    exists () {
+      return store.exists(versionFile)
     },
-    get (cb) {
-      store.read(versionFile)
+    get () {
+      return store.read(versionFile)
         .map((version) => version.toString('utf8'))
-        .subscribe((version) => cb(null, version), cb)
     },
-    set (value, cb) {
-      locks.lock((err) => {
-        if (err) {
-          return cb(err)
-        }
-
-        store.write(versionFile, value)
-          .subscribe(null, cb, () => {
-            locks.unlock(cb)
-          })
-      })
+    set (value) {
+      return locks
+        .lock()
+        .mergeMap(() => store.write(versionFile, value))
+        .catch((err) => {
+          return locks.unlock()
+            .mergeMap(() => Rx.Observable.throw(err))
+        })
+        .mergeMap(() => locks.unlock())
     }
   }
 }

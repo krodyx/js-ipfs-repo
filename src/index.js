@@ -42,8 +42,8 @@ function Repo (repoPath, options) {
     this[name] = stores[name].setUp(repoPath, config, this.locks, this.config)
   })
 
-  this.exists = (cb) => {
-    this.version.exists(cb)
+  this.exists = () => {
+    return this.version.exists()
   }
 }
 

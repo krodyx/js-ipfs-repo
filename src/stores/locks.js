@@ -1,7 +1,5 @@
 'use strict'
 
-const Rx = require('rxjs/Rx')
-
 exports = module.exports
 
 exports.setUp = (basePath, BlobStore) => {
@@ -9,24 +7,20 @@ exports.setUp = (basePath, BlobStore) => {
   const lockFile = 'repo.lock'
 
   return {
-    lock (cb) {
-      store.exists(lockFile)
-        .mergeMap((exists) => {
-          if (exists) return Rx.Observable.empty()
-
-          return store.write(lockFile)
-        })
-        .subscribe(null, cb, cb)
+    lock () {
+      return store
+        .exists(lockFile)
+        .filter((exists) => !exists)
+        .mergeMap(() => store.write(lockFile))
+        .defaultIfEmpty(null)
     },
 
     unlock (cb) {
-      store.exists(lockFile)
-        .mergeMap((exists) => {
-          if (!exists) return Rx.Observable.empty()
-
-          return store.remove(lockFile)
-        })
-        .subscribe(null, cb, cb)
+      return store
+        .exists(lockFile)
+        .filter((exists) => exists)
+        .mergeMap(() => store.remove(lockFile))
+        .defaultIfEmpty(null)
     }
   }
 }
