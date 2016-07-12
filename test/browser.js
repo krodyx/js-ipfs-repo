@@ -3,7 +3,7 @@
 'use strict'
 
 const async = require('async')
-const store = require('idb-plus-blob-store')
+const Store = require('../src/idb-store')
 const tests = require('./repo-test')
 const _ = require('lodash')
 const IPFSRepo = require('../src')
@@ -18,8 +18,7 @@ const idb = window.indexedDB ||
 idb.deleteDatabase('ipfs')
 idb.deleteDatabase('ipfs/blocks')
 
-// TODO use arrow funtions again when https://github.com/webpack/webpack/issues/1944 is fixed
-describe('IPFS Repo Tests on the Browser', function () {
+describe('IPFS Repo Tests on the Browser', () => {
   before(function (done) {
     const repoData = []
     repoContext.keys().forEach(function (key) {
@@ -29,8 +28,8 @@ describe('IPFS Repo Tests on the Browser', function () {
       })
     })
 
-    const mainBlob = store('ipfs')
-    const blocksBlob = store('ipfs/blocks')
+    const mainBlob = new Store('ipfs')
+    const blocksBlob = new Store('ipfs/blocks')
 
     async.eachSeries(repoData, (file, cb) => {
       if (_.startsWith(file.key, 'datastore/')) {
@@ -42,23 +41,11 @@ describe('IPFS Repo Tests on the Browser', function () {
 
       const key = blocks ? file.key.replace(/^blocks\//, '') : file.key
 
-      blob.createWriteStream({
-        key: key
-      }).end(file.value, cb)
+      blob.write(key, file.value)
+        .subscribe(null, cb, cb)
     }, done)
   })
 
-  const options = {
-    stores: {
-      keys: store,
-      config: store,
-      datastore: store,
-      // datastoreLegacy: needs https://github.com/ipfs/js-ipfs-repo/issues/6#issuecomment-164650642
-      logs: store,
-      locks: store,
-      version: store
-    }
-  }
-  const repo = new IPFSRepo('ipfs', options)
+  const repo = new IPFSRepo('ipfs', {stores: Store})
   tests(repo)
 })

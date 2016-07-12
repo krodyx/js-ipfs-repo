@@ -57,7 +57,6 @@ module.exports = function (repo) {
         repo.locks
           .lock()
           .mergeMap(() => repo.locks.lock())
-          .mergeMap(() => repo.locks.lock())
           .delay(10)
           .mergeMap(() => repo.locks.unlock())
           .subscribe(null, done, done)

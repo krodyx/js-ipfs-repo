@@ -11,7 +11,7 @@ exports.setUp = (basePath, BlobStore) => {
       return store
         .exists(lockFile)
         .filter((exists) => !exists)
-        .mergeMap(() => store.write(lockFile))
+        .mergeMap(() => store.write(lockFile, 'LOCKED'))
         .defaultIfEmpty(null)
     },
 
